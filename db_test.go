@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/go-pg/migrations"
+	"github.com/go-pg/migrations/v8"
 
-	"github.com/go-pg/pg"
+	"github.com/go-pg/pg/v10"
 )
 
 func connectDB() *pg.DB {
@@ -15,6 +15,11 @@ func connectDB() *pg.DB {
 	})
 
 	_, err := db.Exec("DROP TABLE IF EXISTS gopg_migrations")
+	if err != nil {
+		panic(err)
+	}
+
+	_, _, err = migrations.Run(db, "init")
 	if err != nil {
 		panic(err)
 	}
@@ -49,12 +54,12 @@ func TestVersion(t *testing.T) {
 func TestUpDown(t *testing.T) {
 	db := connectDB()
 
-	migrations.Set([]migrations.Migration{
+	coll := migrations.NewCollection([]*migrations.Migration{
 		{Version: 2, Up: doNothing, Down: doNothing},
 		{Version: 1, Up: doNothing, Down: doNothing},
 		{Version: 3, Up: doNothing, Down: doNothing},
-	})
-	oldVersion, newVersion, err := migrations.Run(db, "up")
+	}...)
+	oldVersion, newVersion, err := coll.Run(db, "up")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +70,7 @@ func TestUpDown(t *testing.T) {
 		t.Fatalf("got %d, wanted 3", newVersion)
 	}
 
-	version, err := migrations.Version(db)
+	version, err := coll.Version(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +86,7 @@ func TestUpDown(t *testing.T) {
 			wantNewVersion = 0
 		}
 
-		oldVersion, newVersion, err = migrations.Run(db, "down")
+		oldVersion, newVersion, err = coll.Run(db, "down")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -92,7 +97,7 @@ func TestUpDown(t *testing.T) {
 			t.Fatalf("got %d, wanted %d", newVersion, wantNewVersion)
 		}
 
-		version, err = migrations.Version(db)
+		version, err = coll.Version(db)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -105,17 +110,17 @@ func TestUpDown(t *testing.T) {
 func TestSetVersion(t *testing.T) {
 	db := connectDB()
 
-	migrations.Set([]migrations.Migration{
+	coll := migrations.NewCollection([]*migrations.Migration{
+		{Version: 3, Up: doPanic, Down: doPanic},
 		{Version: 1, Up: doPanic, Down: doPanic},
 		{Version: 2, Up: doPanic, Down: doPanic},
-		{Version: 3, Up: doPanic, Down: doPanic},
-	})
+	}...)
 
 	for i := 0; i < 5; i++ {
 		wantOldVersion := int64(i)
 		wantNewVersion := int64(i + 1)
 
-		oldVersion, newVersion, err := migrations.Run(
+		oldVersion, newVersion, err := coll.Run(
 			db, "set_version", fmt.Sprint(wantNewVersion))
 		if err != nil {
 			t.Fatal(err)
@@ -127,7 +132,7 @@ func TestSetVersion(t *testing.T) {
 			t.Fatalf("got %d, wanted %d", newVersion, wantNewVersion)
 		}
 
-		version, err := migrations.Version(db)
+		version, err := coll.Version(db)
 		if err != nil {
 			t.Fatal(err)
 		}
